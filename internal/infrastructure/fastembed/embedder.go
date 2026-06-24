@@ -3,11 +3,14 @@ package fastembed
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	lib "github.com/anush008/fastembed-go"
 
 	"github.com/incu6us/qdrant-embeding/internal/domain"
 )
+
+const modelName = "BAAI/bge-small-en-v1.5"
 
 type Embedder struct {
 	model     *lib.FlagEmbedding
@@ -70,6 +73,14 @@ func (e *Embedder) Embed(ctx context.Context, contents []string) ([]domain.Embed
 }
 
 func (e *Embedder) Dimension() int { return e.dimension }
+
+func (e *Embedder) VectorName() string {
+	name := modelName
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	return "fast-" + strings.ToLower(name)
+}
 
 func (e *Embedder) Close() error {
 	e.model.Destroy()

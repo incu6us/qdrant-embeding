@@ -35,7 +35,11 @@ docs/*.md ──► FastEmbed (ONNX, local) ──► 384-d vector ──► Qdr
 - **One vector per file** (whole-file chunking). One point per `.md`.
 - Point IDs are a deterministic UUIDv5 of the file path, so re-running **updates** existing
   points instead of creating duplicates.
-- Payload stored per point: `{ "path": ..., "content": ... }`.
+- The collection is written in the layout the [official Qdrant MCP server](https://github.com/qdrant/mcp-server-qdrant)
+  expects, so the data is searchable from Claude Code with no extra steps
+  (see [Use the ingested data in Claude Code](#use-the-ingested-data-in-claude-code)):
+  - **named vector** `fast-bge-small-en-v1.5` (the server's `fast-<model>` convention),
+  - payload `{ "document": <file text>, "metadata": { "path": <file path> } }`.
 
 > **Note:** `bge-small-en-v1.5` truncates input at `-max-length` tokens (default 512).
 > Files longer than that are truncated to a single vector. For long documents, switch to
@@ -85,6 +89,79 @@ First run downloads the embedding model (~77 MB) into `-cache` (default `model_c
 ```sh
 curl -s http://localhost:6333/collections/markdown | jq .result.points_count
 ```
+
+## Use the ingested data in Claude Code
+
+Claude Code reads the collection through the official
+[Qdrant MCP server](https://github.com/qdrant/mcp-server-qdrant), which exposes a
+`qdrant-find` tool for semantic search. This ingester writes the collection in exactly the
+layout that server reads (named vector `fast-bge-small-en-v1.5`, `document` + `metadata`
+payload), so no conversion is needed.
+
+> **Critical:** the MCP server must embed queries with the **same model** used for ingestion.
+> Set `EMBEDDING_MODEL=BAAI/bge-small-en-v1.5`. If you leave it at the server's default
+> (`all-MiniLM-L6-v2`), query vectors land in a different space / under a different vector
+> name and `qdrant-find` returns nothing.
+
+### 1. Register the MCP server
+
+Requires [`uv`](https://docs.astral.sh/uv/) (provides `uvx`). From the repo (or anywhere):
+
+```sh
+claude mcp add qdrant \
+  -e QDRANT_URL=http://localhost:6333 \
+  -e COLLECTION_NAME=markdown \
+  -e EMBEDDING_MODEL=BAAI/bge-small-en-v1.5 \
+  -e QDRANT_READ_ONLY=true \
+  -- uvx mcp-server-qdrant
+```
+
+- `QDRANT_READ_ONLY=true` exposes only `qdrant-find` (search), not `qdrant-store` — drop it
+  if you also want Claude to write memories into the collection.
+- Add `-e QDRANT_API_KEY=...` if your Qdrant requires auth.
+- Add `-s project` to write the config to a shared `.mcp.json` instead of your user scope.
+
+Equivalent `.mcp.json` (project scope):
+
+```json
+{
+  "mcpServers": {
+    "qdrant": {
+      "command": "uvx",
+      "args": ["mcp-server-qdrant"],
+      "env": {
+        "QDRANT_URL": "http://localhost:6333",
+        "COLLECTION_NAME": "markdown",
+        "EMBEDDING_MODEL": "BAAI/bge-small-en-v1.5",
+        "QDRANT_READ_ONLY": "true"
+      }
+    }
+  }
+}
+```
+
+### 2. Confirm it is connected
+
+```sh
+claude mcp list          # should show "qdrant: ... - ✓ Connected"
+```
+
+Inside a Claude Code session, `/mcp` lists the server and its `qdrant-find` tool.
+
+### 3. Ask questions against your markdown
+
+Claude calls `qdrant-find` automatically when a prompt needs the indexed docs. Examples:
+
+```
+> Search my notes for what Qdrant is used for.
+> Using the qdrant-find tool, what does the markdown say about Go 1.26?
+```
+
+The tool returns the matching `document` text plus its `metadata.path`, which Claude then
+uses to answer — a minimal RAG loop over your `*.md` files.
+
+> First call downloads the model on the Python side too (FastEmbed pulls
+> `bge-small-en-v1.5`), so the first `qdrant-find` may take a few seconds.
 
 ## Architecture (DDD / hexagonal)
 

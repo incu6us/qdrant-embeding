@@ -22,14 +22,16 @@ type Repository struct {
 	baseURL    string
 	apiKey     string
 	collection string
+	vectorName string
 	client     *http.Client
 }
 
-func NewRepository(baseURL, apiKey, collection string) *Repository {
+func NewRepository(baseURL, apiKey, collection, vectorName string) *Repository {
 	return &Repository{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
 		collection: collection,
+		vectorName: vectorName,
 		client:     &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -45,8 +47,10 @@ func (r *Repository) Prepare(ctx context.Context, dimension int) error {
 
 	body := map[string]any{
 		"vectors": map[string]any{
-			"size":     dimension,
-			"distance": "Cosine",
+			r.vectorName: map[string]any{
+				"size":     dimension,
+				"distance": "Cosine",
+			},
 		},
 	}
 	if err := r.do(ctx, http.MethodPut, "/collections/"+r.collection, body, nil); err != nil {
@@ -72,10 +76,10 @@ func (r *Repository) Save(ctx context.Context, documents []domain.EmbeddedDocume
 	for _, ed := range documents {
 		points = append(points, map[string]any{
 			"id":     ed.Document.ID(),
-			"vector": ed.Embedding.Vector(),
+			"vector": map[string]any{r.vectorName: ed.Embedding.Vector()},
 			"payload": map[string]any{
-				"path":    ed.Document.Path(),
-				"content": ed.Document.Content(),
+				"document": ed.Document.Content(),
+				"metadata": map[string]any{"path": ed.Document.Path()},
 			},
 		})
 	}

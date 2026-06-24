@@ -40,7 +40,7 @@ func run(dir, qdrantURL, collection, cacheDir string, maxLength, batchSize int) 
 	log.Printf("model ready, vector dimension=%d", embedder.Dimension())
 
 	source := filesystem.NewMarkdownSource(dir)
-	repo := qdrant.NewRepository(qdrantURL, os.Getenv("QDRANT_API_KEY"), collection)
+	repo := qdrant.NewRepository(qdrantURL, os.Getenv("QDRANT_API_KEY"), collection, embedder.VectorName())
 	service := application.NewIngestService(source, embedder, repo, batchSize)
 
 	log.Printf("ingesting *.md from %q into collection %q at %s", dir, collection, qdrantURL)
