@@ -41,11 +41,13 @@ docs/*.md ──► FastEmbed (ONNX, local) ──► 384-d vector ──► Qdr
   - **named vector** `fast-bge-small-en-v1.5` (the server's `fast-<model>` convention),
   - payload `{ "document": <file text>, "metadata": { "path": <file path> } }`.
 
-> **Note:** `bge-small-en-v1.5` truncates input at `-max-length` tokens (default 512).
-> Files longer than that are truncated to a single vector. For long documents, switch to
-> a chunking strategy (split on headings or fixed windows) — because the `DocumentSource`
-> port (`internal/infrastructure/filesystem`) is the only place files become documents,
-> this is a localized change.
+> **Note:** `bge-small-en-v1.5` has a hard 512-token input window. Each file is truncated
+> to `-max-chars` runes (default 2000 ≈ ~450 tokens) before embedding so it always fits;
+> oversized files become a single truncated vector. (The truncation happens in the embedder
+> because the bundled tokenizer's own truncation is broken — see the comment in
+> `internal/infrastructure/fastembed/embedder.go`.) For long documents, embed multiple
+> chunks instead — split on headings or fixed windows in the `DocumentSource` port
+> (`internal/infrastructure/filesystem`), the single place files become documents.
 
 ## Prerequisites
 
@@ -79,8 +81,8 @@ First run downloads the embedding model (~77 MB) into `-cache` (default `model_c
 | `-qdrant`      | `http://localhost:6333` | Qdrant REST base URL (`QDRANT_URL` env)      |
 | `-collection`  | `markdown`              | Qdrant collection name                       |
 | `-cache`       | `model_cache`           | Embedding model cache directory              |
-| `-max-length`  | `512`                   | Max tokens per document before truncation    |
-| `-batch`       | `16`                    | Embedding + upsert batch size                |
+| `-max-chars`   | `2000`                  | Max characters per document before truncation (fits the 512-token model window) |
+| `-batch`       | `16`                    | Upsert batch size                            |
 
 `QDRANT_API_KEY` is read from the environment and sent as the `api-key` header when set.
 

@@ -18,21 +18,21 @@ func main() {
 	qdrantURL := flag.String("qdrant", envOr("QDRANT_URL", "http://localhost:6333"), "Qdrant REST base URL")
 	collection := flag.String("collection", "markdown", "Qdrant collection name")
 	cacheDir := flag.String("cache", "model_cache", "directory to cache the embedding model")
-	maxLength := flag.Int("max-length", 512, "max token length per document (longer text is truncated)")
+	maxChars := flag.Int("max-chars", 2000, "max characters per document before truncation (keeps input within the model's 512-token limit)")
 	batchSize := flag.Int("batch", 16, "embedding and upsert batch size")
 	flag.Parse()
 
-	if err := run(*dir, *qdrantURL, *collection, *cacheDir, *maxLength, *batchSize); err != nil {
+	if err := run(*dir, *qdrantURL, *collection, *cacheDir, *maxChars, *batchSize); err != nil {
 		log.Fatalf("ingest failed: %v", err)
 	}
 }
 
-func run(dir, qdrantURL, collection, cacheDir string, maxLength, batchSize int) error {
+func run(dir, qdrantURL, collection, cacheDir string, maxChars, batchSize int) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	log.Printf("loading embedding model (cache=%s)...", cacheDir)
-	embedder, err := fastembed.New(cacheDir, maxLength, batchSize)
+	embedder, err := fastembed.New(cacheDir, maxChars)
 	if err != nil {
 		return err
 	}
