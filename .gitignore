@@ -1,0 +1,10 @@
+# compiled binary (module name)
+/qdrant-embeding
+/embed-demo
+
+# downloaded embedding model cache (~77MB)
+/model_cache/
+
+# go test/coverage artifacts
+*.out
+*.test
